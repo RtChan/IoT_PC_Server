@@ -7,6 +7,8 @@
 #include "PC_ServerDlg.h"
 #include "afxdialogex.h"
 
+#include "locale"
+
 #ifdef _DEBUG
 #define new DEBUG_NEW
 #endif
@@ -22,6 +24,7 @@ CPC_ServerDlg::CPC_ServerDlg(CWnd* pParent /*=NULL*/)
 	, m_UserCount(0)
 {
 	m_hIcon = AfxGetApp()->LoadIcon(IDR_MAINFRAME);
+	setlocale(LC_CTYPE, "chs");
 }
 
 void CPC_ServerDlg::DoDataExchange(CDataExchange* pDX)
@@ -107,23 +110,35 @@ void CPC_ServerDlg::OnBnClickedStartserver()
 		return;
 	}
 
-	if (logfile.m_pStream != nullptr) logfile.Close();	//关闭已打开的日志
+	if (logfile.m_pStream != nullptr) {
+		if (m_connect) UpdateLogfile(_T("系统关闭服务器。"));
 
-	try {
-		logfile.Open(m_LogDir, CFile::modeCreate | CFile::modeWrite | CFile::typeText);
+		logfile.Close();							//关闭已打开的日志
+		GetDlgItem(IDC_EDIT_LOGDIR)->EnableWindow(true);
 	}
-	catch(CFileException* e) {
-		e->ReportError();
-		e->Delete();
-	}
+	else {
+		CFileFind finder;
+		BOOL bExist = finder.FindFile(m_LogDir);
 
-	if (logfile.m_pStream == nullptr) {
-		AfxMessageBox(_T("写日志文件失败，请检查文件是否可用！"));
-		UpdateEvent(_T("打开日志文件失败。"));
-		return;
-	}
+		try {
+			if (bExist)								//日志文件存在：打开文件
+				logfile.Open(m_LogDir, CFile::modeWrite | CFile::typeText);
+			else									//日志文件不存在：创建并打开
+				logfile.Open(m_LogDir, CFile::modeCreate | CFile::modeWrite | CFile::typeText);
+		}
+		catch (CFileException* e) {
+			e->ReportError();
+			e->Delete();
+		}
 
-	GetDlgItem(IDC_EDIT_LOGDIR)->EnableWindow(false);
+		if (logfile.m_pStream == nullptr) {
+			AfxMessageBox(_T("写日志文件失败，请检查文件是否可用！"));
+			UpdateEvent(_T("打开日志文件失败。"));
+			return;
+		}
+
+		GetDlgItem(IDC_EDIT_LOGDIR)->EnableWindow(false);
+	}
 
 	/* Socket连接部分 */
 	if (m_connect) {
@@ -131,8 +146,6 @@ void CPC_ServerDlg::OnBnClickedStartserver()
 		listenSocket = nullptr;
 		m_connect = false;
 
-		logfile.Close();	//关闭日志文件
-		GetDlgItem(IDC_EDIT_LOGDIR)->EnableWindow(true);
 		SetDlgItemText(IDC_StartServer, _T("打开服务器"));
 		UpdateEvent(_T("系统关闭服务器。"));
 		return;
@@ -163,6 +176,7 @@ void CPC_ServerDlg::OnBnClickedStartserver()
 	m_connect = true;
 	SetDlgItemText(IDC_StartServer, _T("关闭服务器"));
 	UpdateEvent(_T("系统打开服务器。"));
+	UpdateLogfile(_T("系统打开服务器。"));
 }
 
 void CPC_ServerDlg::OnBnClickedButtonSeletdir()
@@ -240,9 +254,8 @@ void CPC_ServerDlg::AddClient()
 	m_UserCount = m_clientList.GetCount();
 
 	UpdateData(false);			// 从变量获取数据到控件显示
-	UpdateEvent(_T("用户连接服务器。"));
-
-	//SendMSG(_T("Hello!"));
+	UpdateEvent(_T("客户端连接服务器。"));
+	UpdateLogfile(_T("客户端连接服务器。"));
 }
 
 void CPC_ServerDlg::RemoveClient(CServerSocket * pSocket)
@@ -262,6 +275,8 @@ void CPC_ServerDlg::RemoveClient(CServerSocket * pSocket)
 
 			UpdateData(false);
 			UpdateEvent(_T("客户端下线。"));
+			UpdateLogfile(_T("客户端下线。"));
+
 			return;
 		}
 
@@ -292,6 +307,7 @@ void CPC_ServerDlg::RecvData(CServerSocket * pSocket)
 		UpdateEvent(str);
 
 		UpdateLogfile(str);
+		//pLogFile->WriteString(_T("recv.\r\n"));
 	}
 
 	delete pData;
