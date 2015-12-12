@@ -38,6 +38,7 @@ BEGIN_MESSAGE_MAP(CPC_ServerDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_StartServer, &CPC_ServerDlg::OnBnClickedStartserver)
 	ON_BN_CLICKED(IDC_BUTTON_SELETDIR, &CPC_ServerDlg::OnBnClickedButtonSeletdir)
 	ON_EN_CHANGE(IDC_EDIT_LOGDIR, &CPC_ServerDlg::OnEnChangeEditLogdir)
+	ON_BN_CLICKED(IDCANCEL, &CPC_ServerDlg::OnBnClickedCancel)
 END_MESSAGE_MAP()
 
 
@@ -100,11 +101,35 @@ void CPC_ServerDlg::OnBnClickedStartserver()
 	// TODO: 在此添加控件通知处理程序代码
 	UINT m_port = 6000;
 
+	/* 文件IO部分 */
+	if (m_LogDir.GetLength() == 0) {
+		AfxMessageBox(_T("请先设置日志文件路径！"));
+		return;
+	}
+
+	if (logfile.m_pStream != nullptr) logfile.Close();	//关闭已打开的日志
+
+	try {
+		logfile.Open(m_LogDir, CFile::modeCreate | CFile::modeWrite | CFile::typeText);
+	}
+	catch(CFileException* e) {
+		e->ReportError();
+		e->Delete();
+	}
+
+	if (logfile.m_pStream == nullptr) {
+		AfxMessageBox(_T("写日志文件失败，请检查文件是否可用！"));
+		UpdateEvent(_T("打开日志文件失败。"));
+		return;
+	}
+
+	/* Socket连接部分 */
 	if (m_connect) {
 		delete listenSocket;
 		listenSocket = nullptr;
 		m_connect = false;
 
+		logfile.Close();	//关闭日志文件
 		SetDlgItemText(IDC_StartServer, _T("打开服务器"));
 		UpdateEvent(_T("系统关闭服务器。"));
 		return;
@@ -171,6 +196,28 @@ void CPC_ServerDlg::OnEnChangeEditLogdir()
 
 	// TODO:  在此添加控件通知处理程序代码
 	UpdateData(true);
+}
+
+void CPC_ServerDlg::UpdateLogfile(CString str)
+{
+	CString string;
+	CTime time = CTime::GetCurrentTime();
+		
+	if (logfile.m_pStream == nullptr) {
+		return;
+	}
+
+	string = time.Format(_T("%Y/%m/%d %H:%M:%S ")) + str + _T("\r\n");
+
+	try {
+		//logfile.Seek(0, CStdioFile::end);
+		logfile.SeekToEnd();
+		logfile.WriteString(string);
+	}
+	catch (CFileException* e) {
+		e->ReportError();
+		e->Delete();
+	}
 }
 
 void CPC_ServerDlg::AddClient()
@@ -240,6 +287,8 @@ void CPC_ServerDlg::RecvData(CServerSocket * pSocket)
 
 		UpdateData(false);
 		UpdateEvent(str);
+
+		UpdateLogfile(str);
 	}
 
 	delete pData;
@@ -263,4 +312,11 @@ void CPC_ServerDlg::UpdateEvent(CString str)
 	m_Event.SetSel(lastLine + 1, lastLine + 2, 0);
 
 	m_Event.ReplaceSel(string);
+}
+
+void CPC_ServerDlg::OnBnClickedCancel()
+{
+	// TODO: 在此添加控件通知处理程序代码
+	if (logfile.m_pStream != nullptr) logfile.Close();	//关闭已打开的日志
+	CDialogEx::OnCancel();
 }

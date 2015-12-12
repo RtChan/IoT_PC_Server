@@ -40,6 +40,11 @@ public:
 	afx_msg void OnBnClickedButtonSeletdir();
 	afx_msg void OnEnChangeEditLogdir();
 
+//文件IO相关
+public:
+	CStdioFile logfile;
+	void UpdateLogfile(CString str);
+
 //Socket相关
 public:
 	CServerSocket* listenSocket;		// 用于打开服务器
@@ -50,4 +55,5 @@ public:
 	void RecvData(CServerSocket* pSocket);			// 获取数据
 	void UpdateEvent(CString str);					// 更新事件日志
 	//BOOL WChar2MByte(LPCWSTR srcBuff, LPSTR destBuff, int nlen);	//字符转换
+	afx_msg void OnBnClickedCancel();
 };
