@@ -123,6 +123,8 @@ void CPC_ServerDlg::OnBnClickedStartserver()
 		return;
 	}
 
+	GetDlgItem(IDC_EDIT_LOGDIR)->EnableWindow(false);
+
 	/* Socket连接部分 */
 	if (m_connect) {
 		delete listenSocket;
@@ -130,6 +132,7 @@ void CPC_ServerDlg::OnBnClickedStartserver()
 		m_connect = false;
 
 		logfile.Close();	//关闭日志文件
+		GetDlgItem(IDC_EDIT_LOGDIR)->EnableWindow(true);
 		SetDlgItemText(IDC_StartServer, _T("打开服务器"));
 		UpdateEvent(_T("系统关闭服务器。"));
 		return;
