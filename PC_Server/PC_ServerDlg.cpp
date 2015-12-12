@@ -98,8 +98,44 @@ HCURSOR CPC_ServerDlg::OnQueryDragIcon()
 void CPC_ServerDlg::OnBnClickedStartserver()
 {
 	// TODO: 在此添加控件通知处理程序代码
-}
+	UINT m_port = 6000;
 
+	if (m_connect) {
+		delete listenSocket;
+		listenSocket = nullptr;
+		m_connect = false;
+
+		SetDlgItemText(IDC_StartServer, _T("打开服务器"));
+		UpdateEvent(_T("系统关闭服务器。"));
+		return;
+	}
+
+	listenSocket = new CServerSocket();
+	listenSocket->m_pDlg = this;
+
+	if (!listenSocket) {
+		AfxMessageBox(_T("创建套接字出错！"));
+		return;
+	}
+
+	UpdateData(true);	// 从控件获取数据到变量
+
+	if (!listenSocket->Create(m_port)) {
+		AfxMessageBox(_T("创建套接字错误！"));
+		listenSocket->Close();
+		return;
+	}
+
+	if (!listenSocket->Listen()) {
+		AfxMessageBox(_T("监听失败！"));
+		listenSocket->Close();
+		return;
+	}
+
+	m_connect = true;
+	SetDlgItemText(IDC_StartServer, _T("关闭服务器"));
+	UpdateEvent(_T("系统打开服务器。"));
+}
 
 void CPC_ServerDlg::OnBnClickedButtonSeletdir()
 {
@@ -126,7 +162,6 @@ void CPC_ServerDlg::OnBnClickedButtonSeletdir()
 	}
 }
 
-
 void CPC_ServerDlg::OnEnChangeEditLogdir()
 {
 	// TODO:  如果该控件是 RICHEDIT 控件，它将不
@@ -136,4 +171,96 @@ void CPC_ServerDlg::OnEnChangeEditLogdir()
 
 	// TODO:  在此添加控件通知处理程序代码
 	UpdateData(true);
+}
+
+void CPC_ServerDlg::AddClient()
+{
+	CServerSocket *pSocket = new CServerSocket();
+	pSocket->m_pDlg = this;
+	if (!pSocket) {
+		AfxMessageBox(_T("客户连接服务器失败!"));
+		delete pSocket;
+		return;
+	}
+
+	listenSocket->Accept(*pSocket);
+	pSocket->AsyncSelect(FD_WRITE | FD_READ | FD_CLOSE);
+
+	m_clientList.AddTail(pSocket);
+	m_UserCount = m_clientList.GetCount();
+
+	UpdateData(false);			// 从变量获取数据到控件显示
+	UpdateEvent(_T("用户连接服务器。"));
+
+	//SendMSG(_T("Hello!"));
+}
+
+void CPC_ServerDlg::RemoveClient(CServerSocket * pSocket)
+{
+	POSITION nPos = m_clientList.GetHeadPosition();
+	POSITION nTmpPos = nPos;
+
+	while (nPos) {
+		CServerSocket* pSocketItem = (CServerSocket*)m_clientList.GetNext(nPos);
+
+		if (pSocketItem->m_hSocket == pSocket->m_hSocket) {
+			pSocketItem->Close();
+			delete pSocketItem;
+
+			m_clientList.RemoveAt(nTmpPos);
+			m_UserCount = m_clientList.GetCount();
+
+			UpdateData(false);
+			UpdateEvent(_T("客户端下线。"));
+			return;
+		}
+
+		nTmpPos = nPos;
+	}
+}
+
+void CPC_ServerDlg::RecvData(CServerSocket * pSocket)
+{
+	char *pData = nullptr;
+	pData = new char[1024];
+	memset(pData, 0, sizeof(char) * 1024);
+
+	UCHAR leng = 0;
+	CString str;
+
+	if (pSocket->Receive(pData, 1024, 0) != SOCKET_ERROR) {
+		str = pData;
+		//SendMSG(str);
+
+		CString IPadd;
+		UINT port;
+		pSocket->GetPeerName(IPadd, port);	// 重载的方法
+
+		str = _T("接收") + IPadd + _T("的数据：") + str;
+
+		UpdateData(false);
+		UpdateEvent(str);
+	}
+
+	delete pData;
+	pData = nullptr;
+}
+
+void CPC_ServerDlg::UpdateEvent(CString str)
+{
+	CString string;
+	CTime time = CTime::GetCurrentTime();
+
+	//str += _T("\r\n");
+	// 格式化当前时间
+	if (str.GetLength() <= 30)
+		string = time.Format(_T("%Y/%m/%d %H:%M:%S ")) + str + _T("\r\n");
+	else 
+		string = time.Format(_T("%Y/%m/%d %H:%M:%S\r\n")) + str + _T("\r\n");
+
+	//获取编辑框最后一行索引
+	int lastLine = m_Event.LineIndex(m_Event.GetLineCount() - 1);
+	m_Event.SetSel(lastLine + 1, lastLine + 2, 0);
+
+	m_Event.ReplaceSel(string);
 }
